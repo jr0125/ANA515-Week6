@@ -1,0 +1,92 @@
+---
+title: "ANA515_Assignmnet3_Jiaxuan_Ren"
+author: "Jiaxuan Ren"
+date: "`r Sys.Date()`"
+output: pdf_document
+---
+
+```{r setup, include=TRUE, echo=FALSE, message=FALSE}
+knitr::opts_chunk$set(include=TRUE, echo = TRUE, message=FALSE, tidy=TRUE, tidy.opts=list(width.cutoff=60), comment=NA)
+library(tidyverse)
+```
+
+## 1. Download the bulk storm details data for 1987 and save it into my working directory. Read and save the data into the dataframe.
+```{r read_data}
+all_data <- read_csv("StormEvents_details-ftp_v1.0_d1987_c20220425.csv")
+```
+
+## 2. Limit the dataframe to the required columns.
+```{r limit_data}
+mydata <- subset(all_data, select=c(BEGIN_YEARMONTH, EPISODE_ID, STATE, STATE_FIPS, CZ_NAME, CZ_TYPE, CZ_FIPS, EVENT_TYPE))
+glimpse(mydata)
+```
+
+## 3. Arrange the data by the state name.
+```{r arrange_by_state}
+mydata <- mydata %>% arrange(STATE)
+head(mydata)
+```
+## 4. Change state and county names to title case.
+```{r value_title_case}
+mydata <- mydata %>% 
+  mutate(STATE=str_to_title(STATE)) %>%
+  mutate(CZ_NAME=str_to_title(CZ_NAME))
+head(mydata)
+```
+
+## 5. Limit to the events listed by county FIPS (CZ_TYPE of “C”) and then remove the CZ_TYPE column.
+```{r filter_by_cz_type}
+filtered_data <- mydata %>% 
+  filter(CZ_TYPE=="C") %>%
+  select(-c(CZ_TYPE))
+head(filtered_data)
+```
+
+## 6. Pad the state and county FIPS with a “0” at the beginning and then unite the two columns to make one FIPS column with the new state-county FIPS code.
+```{r pad_data}
+padded_data <- mutate(filtered_data, STATE_FIPS=str_pad(filtered_data$STATE_FIPS, width=3, side="left", pad="0"))
+padded_data <- mutate(filtered_data, CZ_FIPS=str_pad(filtered_data$CZ_FIPS, width=4, side="left", pad="0"))
+padded_data <- padded_data %>%
+  unite("fips", STATE_FIPS, CZ_FIPS)
+head(padded_data)
+```
+
+## 7. Change all the column names to lowercase.
+```{r lower_column}
+padded_data <- padded_data %>%
+  rename_all(tolower)
+head(padded_data)
+```
+
+## 8. There is data that comes with base R on U.S. states (data("state")). Use that to create a dataframe with these three columns: state name, area, and region.
+```{r load_new_dataset}
+data("state")
+us_state_info <- data.frame(state=state.name, region=state.region, area=state.area)
+head(us_state_info)
+```
+
+## 9.	Create a dataframe with the number of events per state in the year of your birth. Merge in the state information dataframe you just created in step 8. Remove any states that are not in the state information dataframe.
+```{r num_events}
+# Count the event frequency of each state
+events_count <- data.frame(table(padded_data$state))
+
+# Merge in the state information dataframe
+events_count <- events_count %>%
+  rename(c("state"="Var1")) %>%
+  rename_all(tolower)
+merged_state_info <- merge(x=events_count, y=us_state_info, by.x="state", by.y="state")
+head(merged_state_info)
+```
+
+## 10. Create the plot
+```{r plot}
+library(ggplot2)
+storm_plot <- ggplot(merged_state_info, aes(x=area, y=freq)) +
+  geom_point(aes(color=region)) +
+  labs(x="Land area (square miles)",
+       y="# of storm events in 1987")
+storm_plot
+
+# Save the plot into a png file
+ggsave("storm_plot.png")
+```
